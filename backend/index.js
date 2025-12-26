@@ -1,91 +1,85 @@
 const express = require("express");
 const cors = require("cors");
-const ExcelJS = require("exceljs");
 const cron = require("node-cron");
+const ExcelJS = require("exceljs");
+
+const db = require("./db");
 const fetchGemBids = require("./fetchGemBids");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-let bids = [];
+async function saveSnapshot(source) {
+  const bids = await fetchGemBids();
+  if (bids.length === 0) return false;
 
-// Initial load
-async function loadBids() {
-  bids = await fetchGemBids();
-  console.log("Fetched bids:", bids.length);
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO bids
+    (bid_no, buyer, category, price, url, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const now = new Date().toISOString();
+  const tx = db.transaction(() => {
+    bids.forEach(b =>
+      insert.run(b.bid_no, b.buyer, b.category, b.price, b.url, now)
+    );
+  });
+
+  tx();
+
+  db.prepare(`
+    INSERT OR REPLACE INTO meta (key, value)
+    VALUES ('lastUpdated', ?)
+  `).run(now);
+
+  console.log(`[${source}] Stored ${bids.length} bids`);
+  return true;
 }
-loadBids();
 
-// Cron: 8 AM & 8 PM
-cron.schedule("0 8,20 * * *", async () => {
-  console.log("⏰ Cron refresh");
-  await loadBids();
+/* Daily snapshot */
+cron.schedule("0 3 * * *", () => saveSnapshot("CRON"));
+
+/* APIs */
+app.get("/api/bids", (req, res) => {
+  const rows = db.prepare(`SELECT * FROM bids ORDER BY price ASC`).all();
+  res.json(rows);
 });
 
-// Status
 app.get("/api/status", (req, res) => {
+  const count = db.prepare(`SELECT COUNT(*) c FROM bids`).get().c;
+  const lastUpdated = db.prepare(`
+    SELECT value FROM meta WHERE key='lastUpdated'
+  `).get()?.value;
+
+  res.json({ total: count, lastUpdated });
+});
+
+app.post("/api/refresh", async (req, res) => {
+  const ok = await saveSnapshot("MANUAL");
   res.json({
-    available: bids.length > 0,
-    totalBids: bids.length,
-    lastUpdated: new Date()
+    message: ok
+      ? "Snapshot updated"
+      : "GeM blocked. Showing last available data."
   });
 });
 
-// Bids (category filter only – state is UX level)
-app.get("/api/bids", (req, res) => {
-  const { category } = req.query;
-  let result = [...bids];
-
-  if (category) {
-    result = result.filter(b =>
-      b.category.toLowerCase().includes(category.toLowerCase())
-    );
-  }
-
-  res.json(result);
-});
-
-// L1 comparison
-app.post("/api/bids/compare", (req, res) => {
-  const { bidNos } = req.body;
-  const selected = bids.filter(b => bidNos.includes(b.bid_no));
-
-  selected.sort((a, b) => a.unit_price - b.unit_price);
-  const l1 = selected[0]?.bid_no;
-
-  res.json(
-    selected.map(b => ({ ...b, l1: b.bid_no === l1 }))
-  );
-});
-
-// Excel export
 app.get("/api/bids/excel", async (req, res) => {
+  const bids = db.prepare(`SELECT * FROM bids`).all();
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Desktop L1");
+  const ws = wb.addWorksheet("GeM Bids");
 
   ws.columns = [
     { header: "Bid No", key: "bid_no", width: 25 },
-    { header: "Buyer", key: "buyer", width: 30 },
+    { header: "Buyer", key: "buyer", width: 40 },
     { header: "Category", key: "category", width: 20 },
-    { header: "Price", key: "unit_price", width: 15 },
-    { header: "L1", key: "l1", width: 10 }
+    { header: "Price", key: "price", width: 15 },
+    { header: "URL", key: "url", width: 40 }
   ];
 
-  const sorted = [...bids].sort((a, b) => a.unit_price - b.unit_price);
-  const l1 = sorted[0]?.bid_no;
-
-  bids.forEach(b => {
-    ws.addRow({
-      ...b,
-      l1: b.bid_no === l1 ? "YES" : ""
-    });
-  });
-
-  res.setHeader(
-    "Content-Disposition",
-    "attachment; filename=desktop_l1.xlsx"
-  );
+  bids.forEach(b => ws.addRow(b));
+  res.setHeader("Content-Disposition", "attachment; filename=gem_bids.xlsx");
   await wb.xlsx.write(res);
   res.end();
 });
