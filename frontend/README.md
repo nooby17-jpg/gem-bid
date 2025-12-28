@@ -1,16 +1,36 @@
-# React + Vite
+# 🏛️ Agorá Tenders
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Agorá Tenders** is a snapshot‑based tender discovery platform for Indian public procurement.
 
-Currently, two official plugins are available:
+It helps users **view, filter, and compare active tenders** while redirecting them to the **official GeM Portal** for full details and participation.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> “Agorá” represents a marketplace — this platform is a marketplace of tenders, not a bidding system.
 
-## React Compiler
+---
+## 📄 GeM Data Policy
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Agorá Tenders does not scrape or crawl GeM.
 
-## Expanding the ESLint configuration
+All GeM bid data is:
+- Uploaded manually via Excel by Admin/Sellers
+- Verified using official GeM bid PDFs
+- Displayed for discovery and comparison only
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Users are always redirected to the official GeM portal for bidding.
+
+This ensures legal compliance, data accuracy, and platform sustainability.
+
+
+This is an **information & discovery platform**, not a procurement system.
+
+---
+
+## 🏗️ Architecture
+
+- Frontend: React (Vite)
+- Backend: Node.js + Express
+- Database: SQLite
+- Data Source: Manual GeM Exxcel sheets and PDF
+
+---
+
